@@ -34,6 +34,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "postbuild": "node -e \"const fs=require('fs');const p='dist/bin/comfy-cloud-axi.js';const c=fs.readFileSync(p,'utf8');if(!c.startsWith('#!/usr/bin/env node'))fs.writeFileSync(p,'#!/usr/bin/env node\\n'+c)\"",
     "build:skill": "tsx scripts/build-skill.ts",
     "test": "vitest run",
     "test:watch": "vitest",
