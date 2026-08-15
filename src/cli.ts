@@ -1,5 +1,6 @@
 import { runAxiCli, AxiError } from "axi-sdk-js";
 import { VERSION } from "./version.js";
+import { closeMcpClient } from "./mcp/client.js";
 import { getDashboard } from "./commands/dashboard.js";
 import { getJobStatus, getBatchStatus } from "./commands/job.js";
 import { submitWorkflow, getOutput } from "./commands/workflow.js";
@@ -101,7 +102,8 @@ Flags:
 };
 
 export async function main(): Promise<void> {
-	await runAxiCli({
+	try {
+		await runAxiCli({
 		description: DESCRIPTION,
 		topLevelHelp: TOP_HELP,
 		version: VERSION,
@@ -250,5 +252,8 @@ export async function main(): Promise<void> {
 				return { setup: result };
 			},
 		},
-	});
+		});
+	} finally {
+		await closeMcpClient();
+	}
 }

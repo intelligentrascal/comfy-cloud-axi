@@ -1,4 +1,5 @@
 import { getMcpClient } from "../mcp/client.js";
+import { parseJsonFromContent } from "../mcp/parse.js";
 
 export interface DashboardResult {
   queue: {
@@ -18,14 +19,13 @@ export async function getDashboard(): Promise<DashboardResult> {
   let running = 0;
   let pending = 0;
 
-  if (queueResult.content?.[0]?.text) {
-    try {
-      const data = JSON.parse(queueResult.content[0].text);
-      running = data.queue_running?.length ?? 0;
-      pending = data.queue_pending?.length ?? 0;
-    } catch {
-      // parse failure — leave counts at 0
-    }
+  const data = parseJsonFromContent(queueResult.content) as Record<
+    string,
+    unknown
+  > | null;
+  if (data && typeof data === "object") {
+    running = (data.running as number) ?? 0;
+    pending = (data.pending as number) ?? 0;
   }
 
   return {

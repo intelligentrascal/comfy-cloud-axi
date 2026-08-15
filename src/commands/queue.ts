@@ -1,10 +1,13 @@
 import { getMcpClient } from "../mcp/client.js";
+import { parseJsonFromContent } from "../mcp/parse.js";
 
 export interface QueueStatus {
-  queue_running: unknown[];
-  queue_pending: unknown[];
+  running: number;
+  pending: number;
   [key: string]: unknown;
 }
+
+const EMPTY: QueueStatus = { running: 0, pending: 0 };
 
 export async function getQueue(): Promise<QueueStatus> {
   const client = await getMcpClient();
@@ -12,13 +15,16 @@ export async function getQueue(): Promise<QueueStatus> {
     content?: { text?: string }[];
   };
 
-  if (result.content?.[0]?.text) {
-    try {
-      return JSON.parse(result.content[0].text) as QueueStatus;
-    } catch {
-      return { queue_running: [], queue_pending: [] };
-    }
+  const data = parseJsonFromContent(result.content) as Record<
+    string,
+    unknown
+  > | null;
+  if (data && typeof data === "object") {
+    return {
+      running: (data.running as number) ?? 0,
+      pending: (data.pending as number) ?? 0,
+    };
   }
 
-  return { queue_running: [], queue_pending: [] };
+  return EMPTY;
 }
