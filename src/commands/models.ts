@@ -1,4 +1,5 @@
 import { getMcpClient } from "../mcp/client.js";
+import { parseJsonFromContent } from "../mcp/parse.js";
 
 export interface ModelInfo {
   name: string;
@@ -25,19 +26,25 @@ export async function searchModels(
     limit,
   })) as { content?: { text?: string }[] };
 
-  if (result.content?.[0]?.text) {
-    try {
-      const data = JSON.parse(result.content[0].text);
-      const models = (data.models ?? data ?? []) as ModelInfo[];
-      return {
-        count: models.length,
-        models,
-        message: models.length === 0 ? "No models found" : undefined,
-      };
-    } catch {
-      return { error: "Failed to parse models response", models: [] };
-    }
+  const data = parseJsonFromContent(result.content) as Record<
+    string,
+    unknown
+  > | null;
+  if (!data) {
+    return { error: "No models response returned", models: [] };
   }
 
-  return { error: "No models response returned", models: [] };
+  try {
+    // Live API wraps results in a {data:[...]} envelope.
+    const models = (
+      Array.isArray(data.data) ? data.data : data
+    ) as ModelInfo[];
+    return {
+      count: models.length,
+      models,
+      message: models.length === 0 ? "No models found" : undefined,
+    };
+  } catch {
+    return { error: "Failed to parse models response", models: [] };
+  }
 }

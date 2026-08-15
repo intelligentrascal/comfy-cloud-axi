@@ -1,4 +1,5 @@
 import { getMcpClient } from "../mcp/client.js";
+import { parseJsonFromContent } from "../mcp/parse.js";
 
 export interface TemplateInfo {
   name: string;
@@ -24,19 +25,25 @@ export async function searchTemplates(
     limit,
   })) as { content?: { text?: string }[] };
 
-  if (result.content?.[0]?.text) {
-    try {
-      const data = JSON.parse(result.content[0].text);
-      const templates = (data.templates ?? data ?? []) as TemplateInfo[];
-      return {
-        count: templates.length,
-        templates,
-        message: templates.length === 0 ? "No templates found" : undefined,
-      };
-    } catch {
-      return { error: "Failed to parse templates response", templates: [] };
-    }
+  const data = parseJsonFromContent(result.content) as Record<
+    string,
+    unknown
+  > | null;
+  if (!data) {
+    return { error: "No templates response returned", templates: [] };
   }
 
-  return { error: "No templates response returned", templates: [] };
+  try {
+    // Live API wraps results in a {data:[...]} envelope.
+    const templates = (
+      Array.isArray(data.data) ? data.data : data
+    ) as TemplateInfo[];
+    return {
+      count: templates.length,
+      templates,
+      message: templates.length === 0 ? "No templates found" : undefined,
+    };
+  } catch {
+    return { error: "Failed to parse templates response", templates: [] };
+  }
 }

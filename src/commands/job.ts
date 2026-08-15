@@ -1,4 +1,5 @@
 import { getMcpClient } from "../mcp/client.js";
+import { parseJsonFromContent, type McpContentPart } from "../mcp/parse.js";
 
 export interface JobStatus {
   prompt_id: string;
@@ -8,33 +9,11 @@ export interface JobStatus {
   [key: string]: unknown;
 }
 
-interface McpContent {
-  text?: string;
-}
-
-/**
- * Comfy Cloud MCP responses carry multiple content parts: a human-readable
- * message first, then a JSON payload (and structuredContent). Pick the first
- * text part that parses as JSON, falling back to the last part's raw text.
- */
-function parseJsonFromContent(content: McpContent[] | undefined): unknown {
-  if (!content?.length) return undefined;
-  for (const part of content) {
-    if (!part.text) continue;
-    try {
-      return JSON.parse(part.text);
-    } catch {
-      // not JSON - keep looking
-    }
-  }
-  return undefined;
-}
-
 export async function getJobStatus(promptId: string): Promise<JobStatus> {
   const client = await getMcpClient();
   const result = (await client.callTool("get_job_status", {
     prompt_id: promptId,
-  })) as { content?: McpContent[] };
+  })) as { content?: McpContentPart[] };
 
   const parsed = parseJsonFromContent(result.content);
   if (parsed !== undefined) {
@@ -55,7 +34,7 @@ export async function getBatchStatus(
   const client = await getMcpClient();
   const result = (await client.callTool("get_batch_status", {
     batch_id: batchId,
-  })) as { content?: McpContent[] };
+  })) as { content?: McpContentPart[] };
 
   const parsed = parseJsonFromContent(result.content);
   if (parsed !== undefined) {
