@@ -1,9 +1,9 @@
 import { getMcpClient } from "../mcp/client.js";
 
 export interface GenerateResult {
-  prompt_id?: string;
-  status: string;
-  [key: string]: unknown;
+	prompt_id?: string;
+	status: string;
+	[key: string]: unknown;
 }
 
 /**
@@ -15,45 +15,45 @@ export interface GenerateResult {
  * the caller can surface the spend request instead of a cryptic parse error.
  */
 export async function generateImage(
-  model: string,
-  prompt: string,
-  aspectRatio?: string,
-  confirm = false
+	model: string,
+	prompt: string,
+	aspectRatio?: string,
+	confirm = false,
 ): Promise<GenerateResult> {
-  const client = await getMcpClient();
-  const args: Record<string, unknown> = {
-    type: "image",
-    model,
-    prompt,
-    client_os:
-      process.platform === "win32"
-        ? "windows"
-        : process.platform === "darwin"
-          ? "macos"
-          : "linux",
-  };
-  if (aspectRatio) args.aspect_ratio = aspectRatio;
-  if (confirm) args.confirm = true;
+	const client = await getMcpClient();
+	const args: Record<string, unknown> = {
+		type: "image",
+		model,
+		prompt,
+		client_os:
+			process.platform === "win32"
+				? "windows"
+				: process.platform === "darwin"
+					? "macos"
+					: "linux",
+	};
+	if (aspectRatio) args.aspect_ratio = aspectRatio;
+	if (confirm) args.confirm = true;
 
-  const result = (await client.callTool("partner_generate", args)) as {
-    content?: { text?: string }[];
-  };
+	const result = (await client.callTool("partner_generate", args)) as {
+		content?: { text?: string }[];
+	};
 
-  const text = result.content?.[0]?.text;
-  if (text) {
-    try {
-      return JSON.parse(text) as GenerateResult;
-    } catch {
-      // Not JSON. Spend-gated responses (and server-side errors) come back as
-      // plain text - surface them as-is so the confirmation request or error
-      // is visible instead of a generic parse failure.
-      return {
-        error: text,
-        status: "unconfirmed",
-        confirm_required: /CONFIRMATION REQUIRED/i.test(text),
-      };
-    }
-  }
+	const text = result.content?.[0]?.text;
+	if (text) {
+		try {
+			return JSON.parse(text) as GenerateResult;
+		} catch {
+			// Not JSON. Spend-gated responses (and server-side errors) come back as
+			// plain text - surface them as-is so the confirmation request or error
+			// is visible instead of a generic parse failure.
+			return {
+				error: text,
+				status: /^Submitted/i.test(text) ? "submitted" : "unconfirmed",
+				confirm_required: /CONFIRMATION REQUIRED/i.test(text),
+			};
+		}
+	}
 
-  return { error: "No generation response returned", status: "unknown" };
+	return { error: "No generation response returned", status: "unknown" };
 }
