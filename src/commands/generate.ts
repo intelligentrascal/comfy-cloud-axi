@@ -6,10 +6,19 @@ export interface GenerateResult {
   [key: string]: unknown;
 }
 
+/**
+ * Generate an image via a paid Comfy Cloud partner model.
+ *
+ * Comfy Cloud spend-gates `partner_generate`: the server first responds with a
+ * confirmation prompt (not JSON). Pass `confirm: true` to actually spend
+ * credits from the workspace. Without it, the response is returned verbatim so
+ * the caller can surface the spend request instead of a cryptic parse error.
+ */
 export async function generateImage(
   model: string,
   prompt: string,
-  aspectRatio?: string
+  aspectRatio?: string,
+  confirm = false
 ): Promise<GenerateResult> {
   const client = await getMcpClient();
   const args: Record<string, unknown> = {
@@ -24,16 +33,25 @@ export async function generateImage(
           : "linux",
   };
   if (aspectRatio) args.aspect_ratio = aspectRatio;
+  if (confirm) args.confirm = true;
 
   const result = (await client.callTool("partner_generate", args)) as {
     content?: { text?: string }[];
   };
 
-  if (result.content?.[0]?.text) {
+  const text = result.content?.[0]?.text;
+  if (text) {
     try {
-      return JSON.parse(result.content[0].text) as GenerateResult;
+      return JSON.parse(text) as GenerateResult;
     } catch {
-      return { error: "Failed to parse generation response", status: "unknown" };
+      // Not JSON. Spend-gated responses (and server-side errors) come back as
+      // plain text - surface them as-is so the confirmation request or error
+      // is visible instead of a generic parse failure.
+      return {
+        error: text,
+        status: "unconfirmed",
+        confirm_required: /CONFIRMATION REQUIRED/i.test(text),
+      };
     }
   }
 

@@ -34,7 +34,7 @@ Flags:
 Examples:
   comfy-cloud-axi job status <prompt_id>
   comfy-cloud-axi workflow submit workflow.json
-  comfy-cloud-axi generate flux1-dev "a cat astronaut"`;
+  comfy-cloud-axi generate bfl/flux-pro-1.1-ultra "a cat astronaut" [--confirm]`;
 
 const COMMAND_HELP: Record<string, string> = {
   job: `Check job status
@@ -83,7 +83,12 @@ Flags:
   --help  Show this help`,
   generate: `Generate via partner model
 
-Usage: comfy-cloud-axi generate <model> "<prompt>"
+Usage: comfy-cloud-axi generate <model> "<prompt>" [--confirm]
+
+Generates an image with a paid Comfy Cloud partner model (e.g. bfl/flux-pro-1.1-ultra).
+Comfy Cloud spend-gates generation: without --confirm the tool reports the
+spend request and does NOT generate. Pass --confirm only after the user has
+explicitly agreed to spend credits.
 
 Flags:
   --help  Show this help`,
@@ -216,14 +221,16 @@ export async function main(): Promise<void> {
         if (args[0] === "--help") {
           return COMMAND_HELP.generate;
         }
-        const model = args[0];
-        const prompt = args.slice(1).join(" ");
+        const confirm = args.includes("--confirm");
+        const positionals = args.filter((a) => a !== "--confirm");
+        const model = positionals[0];
+        const prompt = positionals.slice(1).join(" ");
         if (!model || !prompt) {
           throw new AxiError("model and prompt are required", "VALIDATION_ERROR", [
-            'Run `comfy-cloud-axi generate <model> "<prompt>"`',
+            'Run `comfy-cloud-axi generate <model> "<prompt>" [--confirm]`',
           ]);
         }
-        return await generateImage(model, prompt);
+        return await generateImage(model, prompt, undefined, confirm);
       },
       setup: async (args) => {
         if (args[0] === "--help") {
