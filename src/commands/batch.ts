@@ -67,3 +67,28 @@ export async function getBatchOutput(
 
   return { error: "No batch output returned" };
 }
+
+/**
+ * Block until every job in a batch reaches a terminal state.
+ * If the server times out (~25s) it returns `{timed_out: true}` — call again
+ * until all jobs are terminal, then use `batch output` to retrieve results.
+ */
+export async function waitForBatch(
+  batchId: string,
+): Promise<Record<string, unknown>> {
+  const client = await getMcpClient();
+  const result = (await client.callTool("wait_for_batch", {
+    batch_id: batchId,
+  })) as { content?: McpContentPart[] };
+
+  const parsed = parseJsonFromContent(result.content) as Record<
+    string,
+    unknown
+  > | null;
+  if (parsed !== undefined) return parsed as Record<string, unknown>;
+
+  const text = result.content?.[result.content.length - 1]?.text;
+  if (text) return { result: text };
+
+  return { error: "No wait_for_batch response returned" };
+}

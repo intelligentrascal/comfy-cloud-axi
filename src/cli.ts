@@ -2,38 +2,52 @@ import { runAxiCli, AxiError } from "axi-sdk-js";
 import { VERSION } from "./version.js";
 import { closeMcpClient } from "./mcp/client.js";
 import { getDashboard } from "./commands/dashboard.js";
-import { getJobStatus, getBatchStatus, waitForJob } from "./commands/job.js";
-import { submitWorkflow, getOutput, listWorkflows } from "./commands/workflow.js";
+import { getJobStatus, getBatchStatus, waitForJob, cancelJob } from "./commands/job.js";
+import {
+  submitWorkflow,
+  getOutput,
+  listWorkflows,
+  runSavedWorkflow,
+  usePreviousOutput,
+} from "./commands/workflow.js";
 import { uploadImage } from "./commands/upload.js";
 import { getQueue } from "./commands/queue.js";
 import { searchModels } from "./commands/models.js";
 import { searchTemplates, runTemplate } from "./commands/templates.js";
 import { generateImage } from "./commands/generate.js";
 import { getCatalog } from "./commands/catalog.js";
-import { estimateCredits } from "./commands/estimate.js";
+import { estimateTemplate, estimateWorkflow } from "./commands/estimate.js";
 import { getPromptingGuide } from "./commands/guide.js";
-import { submitBatch, getBatchOutput } from "./commands/batch.js";
+import { submitBatch, getBatchOutput, waitForBatch } from "./commands/batch.js";
+import { searchNodes } from "./commands/nodes.js";
+import { getUsageReport } from "./commands/usage.js";
+import { getCreativeTechnique } from "./commands/technique.js";
 import { setupHooks } from "./commands/setup.js";
 
 const DESCRIPTION =
-	"Comfy Cloud CLI for agents — token-efficient TOON output for AI generation workflows, jobs, and models";
+	"Comfy Cloud CLI for agents — token-efficient TOON output for AI generation workflows, jobs, models, and templates";
 
 const TOP_HELP = `Comfy Cloud CLI for agents
 
 Usage: comfy-cloud-axi <command> [args] [flags]
 
 Commands:
-  catalog     List all partner models with credit costs
-  estimate    Estimate credits for a generation
-  guide       Get prompting tips for a partner model
-  job         Check job status or wait for completion
-  workflow    Submit, list, and get output from workflows
-  batch       Submit and retrieve batch jobs
+  catalog     Show search taxonomy (model types, template tags, node categories)
+  guide       Prompting guide for a model family or partner model playbook
+  estimate    Estimate credit cost for a template or workflow
+  technique   Creative technique recipes (list or fetch by name)
+
+  generate    Generate via partner model (image/video/audio — requires credits)
+  job         Check, wait, cancel, or chain jobs
+  workflow    Submit, list, run, and get output from workflows
+  batch       Submit, wait, and retrieve batch jobs
+  templates   Search and run workflow templates
+  nodes       Search available ComfyUI nodes
+  models      Search ComfyUI model library
+
   upload      Upload an image
   queue       Show queue status
-  models      Search ComfyUI models
-  templates   Search and run templates
-  generate    Generate via partner model (requires credits)
+  usage       Workspace spend report
   setup       Install session hooks
 
 Flags:
@@ -41,123 +55,167 @@ Flags:
   --version   Show version
 
 Examples:
-  comfy-cloud-axi catalog
-  comfy-cloud-axi estimate bfl/flux-pro-1.1-ultra "a cat astronaut"
-  comfy-cloud-axi generate bfl/flux-pro-1.1-ultra "a cat astronaut" --confirm
-  comfy-cloud-axi workflow submit workflow.json
+  comfy-cloud-axi guide partner              # list all 22 partner model slugs
+  comfy-cloud-axi estimate template flux-turbo-t2i
+  comfy-cloud-axi generate bfl/flux-2-pro "a cat astronaut" --confirm
+  comfy-cloud-axi workflow run my-workflow.json
   comfy-cloud-axi job wait <prompt_id>`;
 
 const COMMAND_HELP: Record<string, string> = {
-	catalog: `List all available Comfy Cloud partner models
+	catalog: `Show search taxonomy (model types, template tags, node categories)
 
 Usage: comfy-cloud-axi catalog
 
-Run this first to discover model IDs and per-generation credit costs before
-calling \`generate\` or \`estimate\`.
+Returns the valid filter values for search_models (type), search_templates (tag),
+and search_nodes (category) with result counts.
+
+To list all 22 partner model slugs: comfy-cloud-axi guide partner
 
 Flags:
   --help  Show this help`,
-	estimate: `Estimate credits for a generation
+	guide: `Get a prompting guide for a model family or the full partner model playbook
 
-Usage: comfy-cloud-axi estimate <model> "<prompt>" [--aspect-ratio <ratio>]
+Usage: comfy-cloud-axi guide <model-or-topic>
 
-Shows the credit cost for a generation WITHOUT spending credits. Run before
-\`generate --confirm\` so you can surface the cost and get user approval.
+Pass a model family name (e.g. "flux dev", "sdxl", "wan") for workflow settings.
+Pass "partner" for the complete partner_generate playbook: all 22 registered
+partner model slugs, per-provider params, and edit routing.
 
-Flags:
-  --aspect-ratio <ratio>  Aspect ratio (e.g. 16:9, 1:1)
-  --help                  Show this help`,
-	guide: `Get prompting tips for a partner model
-
-Usage: comfy-cloud-axi guide <model>
-
-Returns model-specific advice for writing effective prompts.
+Topics: seedance-video, openai-images, templates, saved-workflows, output-downloads
 
 Flags:
   --help  Show this help`,
-	job: `Check job status or wait for completion
+	estimate: `Estimate credit cost for a template or workflow (read-only — nothing is run)
+
+Usage:
+  comfy-cloud-axi estimate template <template-name>   # estimate a template by name
+  comfy-cloud-axi estimate workflow <file.json>        # estimate a workflow JSON file
+
+Flags:
+  --help  Show this help`,
+	technique: `List or fetch creative technique recipes
+
+Usage:
+  comfy-cloud-axi technique           # list all available techniques
+  comfy-cloud-axi technique <name>    # get the full step-by-step recipe
+
+Flags:
+  --help  Show this help`,
+	generate: `Generate via partner model (image/video/audio — requires credits)
+
+Usage: comfy-cloud-axi generate <model> "<prompt>" [--type <type>] [--confirm]
+
+Generates via a paid Comfy Cloud partner model. Spend-gated: without --confirm
+the server returns a confirmation with the credit cost — no credits charged.
+Pass --confirm only after the user has agreed to spend credits.
+
+Flow:
+  1. guide partner            # see all 22 model slugs + pricing notes
+  2. generate <model> "<p>"   # shows spend request (no charge)
+  3. generate <model> "<p>" --confirm  # generates, returns prompt_id
+  4. job wait <prompt_id>     # block until ready
+  5. workflow output <prompt_id>  # retrieve URLs
+
+Common slugs (use "guide partner" for the full live list):
+  Image:  bfl/flux-2-pro, bfl/flux-pro-1.1-ultra, bfl/flux-kontext-pro,
+          openai/images-generations, ideogram/generate,
+          vertexai/nano-banana-2, vertexai/nano-banana-pro,
+          xai/grok-image-generate, byteplus/images-generations
+  Video:  bfl/flux-3-video, byteplus/seedance-2.0-t2v, kling/kling-v3-t2v,
+          kling/kling-3.0-turbo-t2v, minimax/hailuo-03-t2v, veo/veo-3-t2v
+  Audio:  elevenlabs/sound-generation
+
+Flags:
+  --type <type>            image (default), video, audio, 3d, svg, music
+  --aspect-ratio <ratio>   e.g. 16:9, 1:1, 9:16
+  --confirm                Authorise credit spend and generate
+  --help                   Show this help`,
+	job: `Check, wait, cancel, or chain jobs
 
 Usage: comfy-cloud-axi job <subcommand> [args]
 
 Subcommands:
-  status <prompt_id>  Check status of a job by prompt ID
-  batch <batch_id>    Check status of a batch by batch ID
-  wait <prompt_id>    Block until the job is ready (preferred over polling)
+  status <prompt_id>    Point-in-time status check
+  wait <prompt_id>      Block until ready (preferred over polling)
+  cancel <prompt_id>    Cancel a pending or running job
+  chain <prompt_id>     Make this job's output available as input for next workflow
+  batch <batch_id>      Check status of all jobs in a batch
 
 Flags:
   --help  Show this help`,
-	workflow: `Submit, list, and get output from workflows
+	workflow: `Submit, list, run, and get output from workflows
 
 Usage: comfy-cloud-axi workflow <subcommand> [args]
 
 Subcommands:
-  submit <file>       Submit a workflow JSON file — returns a prompt_id
-  list                List saved workflows in this workspace
-  output <prompt_id>  Get output for a completed prompt
+  submit <file>               Submit a workflow JSON → prompt_id
+  list                        List saved workflows in this workspace
+  run <filename-or-uuid>      Run a saved workflow by filename or UUID
+  output <prompt_id>          Get output for a completed job
 
 Flags:
-  --help  Show this help`,
-	batch: `Submit and retrieve batch jobs
+  --confirm  (run) Authorise credit spend if the workflow uses paid API nodes
+  --help     Show this help`,
+	batch: `Submit, wait, and retrieve batch jobs
 
 Usage: comfy-cloud-axi batch <subcommand> [args]
 
 Subcommands:
-  submit <file>       Submit a batch JSON file — returns a batch_id
-  output <batch_id>   Get output for a completed batch
+  submit <file>       Submit a batch JSON → batch_id
+  wait <batch_id>     Block until all jobs terminal (~25s per call; repeat if timed_out)
+  output <batch_id>   Get output for all ready jobs in the batch
 
 Flags:
   --help  Show this help`,
-	upload: `Upload an image
+	templates: `Search and run workflow templates
+
+Usage:
+  comfy-cloud-axi templates <query>          # search templates
+  comfy-cloud-axi templates run <name>       # run a template → prompt_id
+
+The template name for "run" must match exactly (from search results).
+Templates with paid API nodes are spend-gated: run without --confirm first,
+then re-run with --confirm after user approves the credit spend.
+
+Flags:
+  --confirm  Authorise credit spend for this template run
+  --help     Show this help`,
+	nodes: `Search available ComfyUI nodes
+
+Usage: comfy-cloud-axi nodes <query> [--api-only] [--category <cat>]
+
+Flags:
+  --api-only         Only return partner/API-backed nodes
+  --category <cat>   Filter by category prefix (e.g. "image", "sampling")
+  --help             Show this help`,
+	models: `Search the ComfyUI model library (checkpoints, LoRAs, VAEs, etc.)
+
+Usage: comfy-cloud-axi models <query>
+
+For partner generation models (Flux, OpenAI, etc.) use: guide partner
+
+Flags:
+  --help  Show this help`,
+	upload: `Upload an image file
 
 Usage: comfy-cloud-axi upload <file>
 
 Flags:
   --help  Show this help`,
-	queue: `Show queue status
+	queue: `Show account-wide queue status
 
 Usage: comfy-cloud-axi queue
 
 Flags:
   --help  Show this help`,
-	models: `Search ComfyUI models
+	usage: `Show workspace spend report
 
-Usage: comfy-cloud-axi models <query>
-
-Searches the ComfyUI model library (checkpoints, LoRAs, etc.). To find
-partner generation models, use \`catalog\` instead.
+Usage: comfy-cloud-axi usage [--group-by model|endpoint|product] [--months N]
 
 Flags:
-  --help  Show this help`,
-	templates: `Search and run templates
-
-Usage: comfy-cloud-axi templates <subcommand|query>
-
-Subcommands:
-  run <template_id>  Run a template by ID — returns a prompt_id
-
-Or pass a search query directly:
-  comfy-cloud-axi templates portrait
-
-Flags:
-  --help  Show this help`,
-	generate: `Generate via partner model (requires credits)
-
-Usage: comfy-cloud-axi generate <model> "<prompt>" [--confirm] [--aspect-ratio <ratio>]
-
-Generates an image with a paid Comfy Cloud partner model.
-Comfy Cloud spend-gates generation: without --confirm the server returns a
-confirmation request showing the credit cost — it does NOT generate. Pass
---confirm only after the user has explicitly agreed to spend credits.
-
-Flow:
-  1. Run \`catalog\` to discover model IDs and per-generation costs
-  2. Run \`estimate <model> "<prompt>"\` to confirm the credit cost
-  3. Run \`generate <model> "<prompt>" --confirm\` to generate
-
-Flags:
-  --confirm                Authorise the credit spend and run the generation
-  --aspect-ratio <ratio>   Aspect ratio (e.g. 16:9, 1:1, 9:16)
-  --help                   Show this help`,
+  --group-by <field>  Group breakdown by model (default), endpoint, or product
+  --months <N>        Months of history, 1–24 (default 1)
+  --help              Show this help`,
 	setup: `Install session hooks
 
 Usage: comfy-cloud-axi setup hooks
@@ -183,214 +241,69 @@ export async function main(): Promise<void> {
 		},
 		commands: {
 			catalog: async (args) => {
-				if (args[0] === "--help") {
-					return COMMAND_HELP.catalog;
-				}
+				if (args[0] === "--help") return COMMAND_HELP.catalog;
 				return await getCatalog();
 			},
-			estimate: async (args) => {
-				if (args[0] === "--help") {
-					return COMMAND_HELP.estimate;
-				}
-				const aspectRatioIdx = args.indexOf("--aspect-ratio");
-				const aspectRatio =
-					aspectRatioIdx !== -1 ? args[aspectRatioIdx + 1] : undefined;
-				const positionals = args.filter(
-					(a, i) =>
-						a !== "--aspect-ratio" &&
-						(aspectRatioIdx === -1 || i !== aspectRatioIdx + 1),
-				);
-				const model = positionals[0];
-				const prompt = positionals.slice(1).join(" ");
-				if (!model || !prompt) {
+			guide: async (args) => {
+				if (args[0] === "--help") return COMMAND_HELP.guide;
+				const modelOrTopic = args.join(" ") || "";
+				if (!modelOrTopic) {
 					throw new AxiError(
-						"model and prompt are required",
+						"model or topic is required",
 						"VALIDATION_ERROR",
-						['Run `comfy-cloud-axi estimate <model> "<prompt>"`'],
+						[
+							'Pass a model family (e.g. "flux dev") or "partner" for all partner model slugs',
+							"Or pass a topic: seedance-video, openai-images, templates, saved-workflows, output-downloads",
+						],
 					);
 				}
-				return await estimateCredits(model, prompt, aspectRatio);
+				return await getPromptingGuide(modelOrTopic);
 			},
-			guide: async (args) => {
-				if (args[0] === "--help") {
-					return COMMAND_HELP.guide;
-				}
-				const model = args[0];
-				if (!model) {
-					throw new AxiError("model is required", "VALIDATION_ERROR", [
-						"Run `comfy-cloud-axi guide <model>`",
-					]);
-				}
-				return await getPromptingGuide(model);
-			},
-			job: async (args) => {
-				if (args[0] === "--help") {
-					return COMMAND_HELP.job;
-				}
+			estimate: async (args) => {
+				if (args[0] === "--help") return COMMAND_HELP.estimate;
 				const subcommand = args[0];
-				if (subcommand === "status") {
-					const promptId = args[1];
-					if (!promptId) {
-						throw new AxiError("prompt_id is required", "VALIDATION_ERROR", [
-							"Run `comfy-cloud-axi job status <prompt_id>`",
+				const target = args[1];
+				if (subcommand === "template") {
+					if (!target) {
+						throw new AxiError("template name is required", "VALIDATION_ERROR", [
+							"Run `comfy-cloud-axi estimate template <template-name>`",
 						]);
 					}
-					return await getJobStatus(promptId);
+					return await estimateTemplate(target);
 				}
-				if (subcommand === "batch") {
-					const batchId = args[1];
-					if (!batchId) {
-						throw new AxiError("batch_id is required", "VALIDATION_ERROR", [
-							"Run `comfy-cloud-axi job batch <batch_id>`",
+				if (subcommand === "workflow") {
+					if (!target) {
+						throw new AxiError("workflow file path is required", "VALIDATION_ERROR", [
+							"Run `comfy-cloud-axi estimate workflow <file.json>`",
 						]);
 					}
-					return await getBatchStatus(batchId);
-				}
-				if (subcommand === "wait") {
-					const promptId = args[1];
-					if (!promptId) {
-						throw new AxiError("prompt_id is required", "VALIDATION_ERROR", [
-							"Run `comfy-cloud-axi job wait <prompt_id>`",
-						]);
-					}
-					return await waitForJob(promptId);
+					return await estimateWorkflow(target);
 				}
 				throw new AxiError(
 					`unknown subcommand \`${subcommand}\``,
 					"VALIDATION_ERROR",
-					["valid subcommands: status, batch, wait"],
+					["valid subcommands: template, workflow"],
 				);
 			},
-			workflow: async (args) => {
-				if (args[0] === "--help") {
-					return COMMAND_HELP.workflow;
-				}
-				const subcommand = args[0];
-				if (subcommand === "submit") {
-					const filePath = args[1];
-					if (!filePath) {
-						throw new AxiError(
-							"workflow file path is required",
-							"VALIDATION_ERROR",
-							["Run `comfy-cloud-axi workflow submit <file>`"],
-						);
-					}
-					return await submitWorkflow(filePath);
-				}
-				if (subcommand === "list") {
-					return await listWorkflows();
-				}
-				if (subcommand === "output") {
-					const promptId = args[1];
-					if (!promptId) {
-						throw new AxiError("prompt_id is required", "VALIDATION_ERROR", [
-							"Run `comfy-cloud-axi workflow output <prompt_id>`",
-						]);
-					}
-					return await getOutput(promptId);
-				}
-				throw new AxiError(
-					`unknown subcommand \`${subcommand}\``,
-					"VALIDATION_ERROR",
-					["valid subcommands: submit, list, output"],
-				);
-			},
-			batch: async (args) => {
-				if (args[0] === "--help") {
-					return COMMAND_HELP.batch;
-				}
-				const subcommand = args[0];
-				if (subcommand === "submit") {
-					const filePath = args[1];
-					if (!filePath) {
-						throw new AxiError(
-							"batch file path is required",
-							"VALIDATION_ERROR",
-							["Run `comfy-cloud-axi batch submit <file>`"],
-						);
-					}
-					return await submitBatch(filePath);
-				}
-				if (subcommand === "output") {
-					const batchId = args[1];
-					if (!batchId) {
-						throw new AxiError("batch_id is required", "VALIDATION_ERROR", [
-							"Run `comfy-cloud-axi batch output <batch_id>`",
-						]);
-					}
-					return await getBatchOutput(batchId);
-				}
-				throw new AxiError(
-					`unknown subcommand \`${subcommand}\``,
-					"VALIDATION_ERROR",
-					["valid subcommands: submit, output"],
-				);
-			},
-			upload: async (args) => {
-				if (args[0] === "--help") {
-					return COMMAND_HELP.upload;
-				}
-				const filePath = args[0];
-				if (!filePath) {
-					throw new AxiError("file path is required", "VALIDATION_ERROR", [
-						"Run `comfy-cloud-axi upload <file>`",
-					]);
-				}
-				return await uploadImage(filePath);
-			},
-			queue: async (args) => {
-				if (args[0] === "--help") {
-					return COMMAND_HELP.queue;
-				}
-				return await getQueue();
-			},
-			models: async (args) => {
-				if (args[0] === "--help") {
-					return COMMAND_HELP.models;
-				}
-				const query = args.join(" ") || "";
-				if (!query) {
-					throw new AxiError("search query is required", "VALIDATION_ERROR", [
-						"Run `comfy-cloud-axi models <query>`",
-					]);
-				}
-				return await searchModels(query);
-			},
-			templates: async (args) => {
-				if (args[0] === "--help") {
-					return COMMAND_HELP.templates;
-				}
-				if (args[0] === "run") {
-					const templateId = args[1];
-					if (!templateId) {
-						throw new AxiError(
-							"template_id is required",
-							"VALIDATION_ERROR",
-							["Run `comfy-cloud-axi templates run <template_id>`"],
-						);
-					}
-					return await runTemplate(templateId);
-				}
-				const query = args.join(" ") || "";
-				if (!query) {
-					throw new AxiError("search query is required", "VALIDATION_ERROR", [
-						"Run `comfy-cloud-axi templates <query>` or `templates run <id>`",
-					]);
-				}
-				return await searchTemplates(query);
+			technique: async (args) => {
+				if (args[0] === "--help") return COMMAND_HELP.technique;
+				const name = args[0];
+				return await getCreativeTechnique(name);
 			},
 			generate: async (args) => {
-				if (args[0] === "--help") {
-					return COMMAND_HELP.generate;
-				}
+				if (args[0] === "--help") return COMMAND_HELP.generate;
 				const confirm = args.includes("--confirm");
+				const typeIdx = args.indexOf("--type");
+				const genType = typeIdx !== -1 ? args[typeIdx + 1] : "image";
 				const aspectRatioIdx = args.indexOf("--aspect-ratio");
 				const aspectRatio =
 					aspectRatioIdx !== -1 ? args[aspectRatioIdx + 1] : undefined;
 				const positionals = args.filter(
 					(a, i) =>
 						a !== "--confirm" &&
+						a !== "--type" &&
 						a !== "--aspect-ratio" &&
+						(typeIdx === -1 || i !== typeIdx + 1) &&
 						(aspectRatioIdx === -1 || i !== aspectRatioIdx + 1),
 				);
 				const model = positionals[0];
@@ -404,20 +317,152 @@ export async function main(): Promise<void> {
 				}
 				return await generateImage(model, prompt, aspectRatio, confirm);
 			},
-			setup: async (args) => {
-				if (args[0] === "--help") {
-					return COMMAND_HELP.setup;
-				}
+			job: async (args) => {
+				if (args[0] === "--help") return COMMAND_HELP.job;
 				const subcommand = args[0];
-				if (subcommand !== "hooks") {
-					throw new AxiError(
-						`unknown subcommand \`${subcommand}\``,
-						"VALIDATION_ERROR",
-						["Run `comfy-cloud-axi setup hooks`"],
-					);
+				if (subcommand === "status") {
+					const promptId = args[1];
+					if (!promptId) throw new AxiError("prompt_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi job status <prompt_id>`"]);
+					return await getJobStatus(promptId);
 				}
-				const result = await setupHooks();
-				return { setup: result };
+				if (subcommand === "wait") {
+					const promptId = args[1];
+					if (!promptId) throw new AxiError("prompt_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi job wait <prompt_id>`"]);
+					return await waitForJob(promptId);
+				}
+				if (subcommand === "cancel") {
+					const promptId = args[1];
+					if (!promptId) throw new AxiError("prompt_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi job cancel <prompt_id>`"]);
+					return await cancelJob(promptId);
+				}
+				if (subcommand === "chain") {
+					const promptId = args[1];
+					if (!promptId) throw new AxiError("prompt_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi job chain <prompt_id>`"]);
+					const outputIndex = args[2] ? parseInt(args[2], 10) : 0;
+					return await usePreviousOutput(promptId, outputIndex);
+				}
+				if (subcommand === "batch") {
+					const batchId = args[1];
+					if (!batchId) throw new AxiError("batch_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi job batch <batch_id>`"]);
+					return await getBatchStatus(batchId);
+				}
+				throw new AxiError(
+					`unknown subcommand \`${subcommand}\``,
+					"VALIDATION_ERROR",
+					["valid subcommands: status, wait, cancel, chain, batch"],
+				);
+			},
+			workflow: async (args) => {
+				if (args[0] === "--help") return COMMAND_HELP.workflow;
+				const confirm = args.includes("--confirm");
+				const positionals = args.filter((a) => a !== "--confirm");
+				const subcommand = positionals[0];
+				if (subcommand === "submit") {
+					const filePath = positionals[1];
+					if (!filePath) throw new AxiError("workflow file path is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi workflow submit <file>`"]);
+					return await submitWorkflow(filePath);
+				}
+				if (subcommand === "list") {
+					return await listWorkflows();
+				}
+				if (subcommand === "run") {
+					const filenameOrId = positionals[1];
+					if (!filenameOrId) throw new AxiError("filename or UUID is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi workflow run <filename-or-uuid>`"]);
+					return await runSavedWorkflow(filenameOrId, { confirm });
+				}
+				if (subcommand === "output") {
+					const promptId = positionals[1];
+					if (!promptId) throw new AxiError("prompt_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi workflow output <prompt_id>`"]);
+					return await getOutput(promptId);
+				}
+				throw new AxiError(
+					`unknown subcommand \`${subcommand}\``,
+					"VALIDATION_ERROR",
+					["valid subcommands: submit, list, run, output"],
+				);
+			},
+			batch: async (args) => {
+				if (args[0] === "--help") return COMMAND_HELP.batch;
+				const subcommand = args[0];
+				if (subcommand === "submit") {
+					const filePath = args[1];
+					if (!filePath) throw new AxiError("batch file path is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi batch submit <file>`"]);
+					return await submitBatch(filePath);
+				}
+				if (subcommand === "wait") {
+					const batchId = args[1];
+					if (!batchId) throw new AxiError("batch_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi batch wait <batch_id>`"]);
+					return await waitForBatch(batchId);
+				}
+				if (subcommand === "output") {
+					const batchId = args[1];
+					if (!batchId) throw new AxiError("batch_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi batch output <batch_id>`"]);
+					return await getBatchOutput(batchId);
+				}
+				throw new AxiError(
+					`unknown subcommand \`${subcommand}\``,
+					"VALIDATION_ERROR",
+					["valid subcommands: submit, wait, output"],
+				);
+			},
+			templates: async (args) => {
+				if (args[0] === "--help") return COMMAND_HELP.templates;
+				const confirm = args.includes("--confirm");
+				const positionals = args.filter((a) => a !== "--confirm");
+				if (positionals[0] === "run") {
+					const templateName = positionals[1];
+					if (!templateName) throw new AxiError("template name is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi templates run <name>`"]);
+					return await runTemplate(templateName, { confirm });
+				}
+				const query = positionals.join(" ") || "";
+				if (!query) throw new AxiError("search query is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi templates <query>` or `templates run <name>`"]);
+				return await searchTemplates(query);
+			},
+			nodes: async (args) => {
+				if (args[0] === "--help") return COMMAND_HELP.nodes;
+				const apiOnly = args.includes("--api-only");
+				const categoryIdx = args.indexOf("--category");
+				const category =
+					categoryIdx !== -1 ? args[categoryIdx + 1] : undefined;
+				const positionals = args.filter(
+					(a, i) =>
+						a !== "--api-only" &&
+						a !== "--category" &&
+						(categoryIdx === -1 || i !== categoryIdx + 1),
+				);
+				const query = positionals.join(" ") || "";
+				return await searchNodes(query, { category, apiOnly });
+			},
+			models: async (args) => {
+				if (args[0] === "--help") return COMMAND_HELP.models;
+				const query = args.join(" ") || "";
+				if (!query) throw new AxiError("search query is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi models <query>`"]);
+				return await searchModels(query);
+			},
+			upload: async (args) => {
+				if (args[0] === "--help") return COMMAND_HELP.upload;
+				const filePath = args[0];
+				if (!filePath) throw new AxiError("file path is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi upload <file>`"]);
+				return await uploadImage(filePath);
+			},
+			queue: async (args) => {
+				if (args[0] === "--help") return COMMAND_HELP.queue;
+				return await getQueue();
+			},
+			usage: async (args) => {
+				if (args[0] === "--help") return COMMAND_HELP.usage;
+				const groupByIdx = args.indexOf("--group-by");
+				const groupBy = groupByIdx !== -1
+					? (args[groupByIdx + 1] as "model" | "endpoint" | "product")
+					: "model";
+				const monthsIdx = args.indexOf("--months");
+				const months = monthsIdx !== -1 ? parseInt(args[monthsIdx + 1], 10) : 1;
+				return await getUsageReport(groupBy, months);
+			},
+			setup: async (args) => {
+				if (args[0] === "--help") return COMMAND_HELP.setup;
+				if (args[0] !== "hooks") throw new AxiError(`unknown subcommand \`${args[0]}\``, "VALIDATION_ERROR", ["Run `comfy-cloud-axi setup hooks`"]);
+				return { setup: await setupHooks() };
 			},
 		},
 		});

@@ -1,41 +1,53 @@
+import { readFile } from "node:fs/promises";
 import { getMcpClient } from "../mcp/client.js";
 import { parseJsonFromContent, type McpContentPart } from "../mcp/parse.js";
 
 export interface EstimateResult {
   credits?: number;
   cost_usd?: number;
-  model?: string;
   error?: string;
   [key: string]: unknown;
 }
 
 /**
- * Estimate the credit cost for a generation before committing.
- * Run this before `generate --confirm` so the caller can surface the cost
- * and get user approval without touching the spend-gate.
+ * Estimate the credit cost of a workflow or template BEFORE running it.
+ * Read-only — nothing is submitted or spent.
+ *
+ * Pass either:
+ *   - templateName: a template `name` from search_templates
+ *   - workflowFile: path to a workflow JSON file (API or save format)
  */
-export async function estimateCredits(
-  model: string,
-  prompt: string,
-  aspectRatio?: string,
+export async function estimateTemplate(
+  templateName: string,
 ): Promise<EstimateResult> {
   const client = await getMcpClient();
-  const args: Record<string, unknown> = { model, prompt };
-  if (aspectRatio) args.aspect_ratio = aspectRatio;
+  const result = (await client.callTool("estimate_credits", {
+    template_name: templateName,
+  })) as { content?: McpContentPart[] };
 
-  const result = (await client.callTool("estimate_credits", args)) as {
-    content?: McpContentPart[];
-  };
+  return parseEstimateResult(result.content);
+}
 
-  const data = parseJsonFromContent(result.content) as Record<
-    string,
-    unknown
-  > | null;
-  if (!data) {
-    const raw = result.content?.[result.content.length - 1]?.text;
-    if (raw) return { raw } as EstimateResult;
-    return { error: "No estimate response returned" };
-  }
+export async function estimateWorkflow(
+  workflowFile: string,
+): Promise<EstimateResult> {
+  const client = await getMcpClient();
+  const raw = await readFile(workflowFile, "utf-8");
+  const workflow = JSON.parse(raw);
 
-  return data as EstimateResult;
+  const result = (await client.callTool("estimate_credits", {
+    workflow,
+  })) as { content?: McpContentPart[] };
+
+  return parseEstimateResult(result.content);
+}
+
+function parseEstimateResult(
+  content: McpContentPart[] | undefined,
+): EstimateResult {
+  const data = parseJsonFromContent(content) as EstimateResult | null;
+  if (data) return data;
+  const raw = content?.[content.length - 1]?.text;
+  if (raw) return { raw } as EstimateResult;
+  return { error: "No estimate response returned" };
 }

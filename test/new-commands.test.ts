@@ -38,25 +38,19 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("getCatalog", () => {
-  it("returns models from {data:[...]} envelope", async () => {
+  it("returns model_types, template_tags, and node_categories from the real catalog shape", async () => {
     vi.mocked(getMcpClient).mockResolvedValue(
       mockClient({
         get_catalog_overview: {
           content: [
             {
               text: JSON.stringify({
-                data: [
-                  {
-                    id: "bfl/flux-pro-1.1-ultra",
-                    provider: "bfl",
-                    credits_per_generation: 10,
-                  },
-                  {
-                    id: "openai/dall-e-3",
-                    provider: "openai",
-                    credits_per_generation: 5,
-                  },
+                model_types: [
+                  { type: "checkpoint", count: 75 },
+                  { type: "lora", count: 750 },
                 ],
+                template_tags: [{ tag: "Text to Image", count: 90 }],
+                node_categories: [{ category: "Basic", count: 279 }],
               }),
             },
           ],
@@ -65,24 +59,10 @@ describe("getCatalog", () => {
     );
     const { getCatalog } = await import("../src/commands/catalog.js");
     const result = await getCatalog();
-    expect(result.count).toBe(2);
-    expect(Array.isArray(result.models)).toBe(true);
-    expect(result.models[0].id).toBe("bfl/flux-pro-1.1-ultra");
-    expect(result.models[0].credits_per_generation).toBe(10);
-  });
-
-  it("returns count 0 for an empty catalog", async () => {
-    vi.mocked(getMcpClient).mockResolvedValue(
-      mockClient({
-        get_catalog_overview: {
-          content: [{ text: JSON.stringify({ data: [] }) }],
-        },
-      })
-    );
-    const { getCatalog } = await import("../src/commands/catalog.js");
-    const result = await getCatalog();
-    expect(result.count).toBe(0);
-    expect(result.models).toEqual([]);
+    expect(Array.isArray(result.model_types)).toBe(true);
+    expect((result.model_types as unknown[]).length).toBe(2);
+    expect(Array.isArray(result.template_tags)).toBe(true);
+    expect(Array.isArray(result.node_categories)).toBe(true);
   });
 
   it("returns an error when no response content is returned", async () => {
@@ -94,7 +74,6 @@ describe("getCatalog", () => {
     const { getCatalog } = await import("../src/commands/catalog.js");
     const result = await getCatalog();
     expect(result.error).toBeTruthy();
-    expect(result.models).toEqual([]);
   });
 });
 
@@ -102,8 +81,8 @@ describe("getCatalog", () => {
 // estimateCredits — estimate_credits
 // ---------------------------------------------------------------------------
 
-describe("estimateCredits", () => {
-  it("returns credits and cost from a JSON response", async () => {
+describe("estimateTemplate / estimateWorkflow", () => {
+  it("estimateTemplate returns credits and cost from a JSON response", async () => {
     vi.mocked(getMcpClient).mockResolvedValue(
       mockClient({
         estimate_credits: {
@@ -112,51 +91,40 @@ describe("estimateCredits", () => {
               text: JSON.stringify({
                 credits: 10,
                 cost_usd: 0.05,
-                model: "bfl/flux-pro-1.1-ultra",
               }),
             },
           ],
         },
       })
     );
-    const { estimateCredits } = await import("../src/commands/estimate.js");
-    const result = await estimateCredits(
-      "bfl/flux-pro-1.1-ultra",
-      "a cat astronaut"
-    );
+    const { estimateTemplate } = await import("../src/commands/estimate.js");
+    const result = await estimateTemplate("flux-turbo-t2i");
     expect(result.credits).toBe(10);
     expect(result.cost_usd).toBe(0.05);
-    expect(result.model).toBe("bfl/flux-pro-1.1-ultra");
   });
 
-  it("falls back to {raw} when the response is plain text (non-JSON)", async () => {
+  it("estimateWorkflow falls back to {raw} when the response is plain text", async () => {
     vi.mocked(getMcpClient).mockResolvedValue(
       mockClient({
         estimate_credits: {
-          content: [{ text: "This generation will cost 10 credits." }],
+          content: [{ text: "This workflow will cost 10 credits." }],
         },
       })
     );
-    const { estimateCredits } = await import("../src/commands/estimate.js");
-    const result = await estimateCredits(
-      "bfl/flux-pro-1.1-ultra",
-      "a cat astronaut"
-    );
+    const { estimateWorkflow } = await import("../src/commands/estimate.js");
+    const result = await estimateWorkflow("workflow.json");
     expect(result.raw).toBeTruthy();
     expect(typeof result.raw).toBe("string");
   });
 
-  it("returns an error when no content is returned", async () => {
+  it("estimateTemplate returns an error when no content is returned", async () => {
     vi.mocked(getMcpClient).mockResolvedValue(
       mockClient({
         estimate_credits: { content: [] },
       })
     );
-    const { estimateCredits } = await import("../src/commands/estimate.js");
-    const result = await estimateCredits(
-      "bfl/flux-pro-1.1-ultra",
-      "a cat astronaut"
-    );
+    const { estimateTemplate } = await import("../src/commands/estimate.js");
+    const result = await estimateTemplate("flux-turbo-t2i");
     expect(result.error).toBeTruthy();
   });
 });

@@ -1,25 +1,20 @@
 import { getMcpClient } from "../mcp/client.js";
 import { parseJsonFromContent, type McpContentPart } from "../mcp/parse.js";
 
-export interface PartnerModel {
-  id: string;
-  name?: string;
-  provider?: string;
-  type?: string;
-  credits_per_generation?: number;
-  [key: string]: unknown;
-}
-
 export interface CatalogResult {
-  count?: number;
-  models: PartnerModel[];
+  model_types?: Array<{ type: string; count: number }>;
+  template_tags?: Array<{ tag: string; count: number }>;
+  node_categories?: Array<{ category: string; count: number }>;
   error?: string;
   [key: string]: unknown;
 }
 
 /**
- * Fetch the full catalog of available Comfy Cloud partner models.
- * Use this before `generate` to discover model IDs and per-generation credit costs.
+ * Fetch the filter taxonomy for search_models, search_templates, and search_nodes.
+ * Returns valid `type` values for search_models, `tag` values for search_templates,
+ * and `category` values for search_nodes — each with result counts.
+ *
+ * For the list of partner model slugs, use: guide partner
  */
 export async function getCatalog(): Promise<CatalogResult> {
   const client = await getMcpClient();
@@ -27,21 +22,10 @@ export async function getCatalog(): Promise<CatalogResult> {
     content?: McpContentPart[];
   };
 
-  const data = parseJsonFromContent(result.content) as Record<
-    string,
-    unknown
-  > | null;
+  const data = parseJsonFromContent(result.content) as CatalogResult | null;
   if (!data) {
-    return { error: "No catalog response returned", models: [] };
+    return { error: "No catalog response returned" };
   }
 
-  const models = (
-    Array.isArray(data.data)
-      ? data.data
-      : Array.isArray(data)
-        ? data
-        : []
-  ) as PartnerModel[];
-
-  return { count: models.length, models };
+  return data;
 }

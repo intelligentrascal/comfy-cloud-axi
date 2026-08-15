@@ -49,16 +49,26 @@ export async function searchTemplates(
 }
 
 /**
- * Run a saved template by its ID.
+ * Run a template by its exact `name` from search_templates.
  * Returns a `prompt_id` to track with `job wait` / `job status`.
+ *
+ * The template is spend-gated if it uses paid API nodes:
+ * call without `confirm` first, then re-call with `confirm: true`
+ * after the user agrees to spend credits.
  */
 export async function runTemplate(
-  templateId: string,
-  inputs?: Record<string, unknown>,
+  templateName: string,
+  options?: {
+    inputOverrides?: Record<string, Record<string, unknown>>;
+    slotOverrides?: Record<string, unknown>;
+    confirm?: boolean;
+  },
 ): Promise<Record<string, unknown>> {
   const client = await getMcpClient();
-  const args: Record<string, unknown> = { template_id: templateId };
-  if (inputs) args.inputs = inputs;
+  const args: Record<string, unknown> = { name: templateName };
+  if (options?.inputOverrides) args.input_overrides = options.inputOverrides;
+  if (options?.slotOverrides) args.slot_overrides = options.slotOverrides;
+  if (options?.confirm) args.confirm = true;
 
   const result = (await client.callTool("run_template", args)) as {
     content?: McpContentPart[];
