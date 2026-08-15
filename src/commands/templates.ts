@@ -1,5 +1,5 @@
 import { getMcpClient } from "../mcp/client.js";
-import { parseJsonFromContent } from "../mcp/parse.js";
+import { parseJsonFromContent, type McpContentPart } from "../mcp/parse.js";
 
 export interface TemplateInfo {
   name: string;
@@ -46,4 +46,34 @@ export async function searchTemplates(
   } catch {
     return { error: "Failed to parse templates response", templates: [] };
   }
+}
+
+/**
+ * Run a saved template by its ID.
+ * Returns a `prompt_id` to track with `job wait` / `job status`.
+ */
+export async function runTemplate(
+  templateId: string,
+  inputs?: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const client = await getMcpClient();
+  const args: Record<string, unknown> = { template_id: templateId };
+  if (inputs) args.inputs = inputs;
+
+  const result = (await client.callTool("run_template", args)) as {
+    content?: McpContentPart[];
+  };
+
+  const parsed = parseJsonFromContent(result.content) as Record<
+    string,
+    unknown
+  > | null;
+  if (parsed !== undefined) {
+    return parsed as Record<string, unknown>;
+  }
+
+  const text = result.content?.[result.content.length - 1]?.text;
+  if (text) return { output: text };
+
+  return { error: "No run_template response returned" };
 }
