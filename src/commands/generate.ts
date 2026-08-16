@@ -7,7 +7,8 @@ export interface GenerateResult {
 }
 
 /**
- * Generate an image via a paid Comfy Cloud partner model.
+ * Generate an image, video, audio, or other media via a paid Comfy Cloud
+ * partner model.
  *
  * Comfy Cloud spend-gates `partner_generate`: the server first responds with a
  * confirmation prompt (not JSON). Pass `confirm: true` to actually spend
@@ -19,10 +20,11 @@ export async function generateImage(
 	prompt: string,
 	aspectRatio?: string,
 	confirm = false,
+	type = "image",
 ): Promise<GenerateResult> {
 	const client = await getMcpClient();
 	const args: Record<string, unknown> = {
-		type: "image",
+		type,
 		model,
 		prompt,
 		client_os:

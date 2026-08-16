@@ -378,6 +378,63 @@ describe("getBatchOutput", () => {
 // runTemplate — run_template
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// generateImage — partner_generate type forwarding
+// ---------------------------------------------------------------------------
+
+describe("generateImage", () => {
+  it("forwards type=image by default", async () => {
+    const callTool = vi.fn().mockResolvedValue({
+      content: [{ text: JSON.stringify({ prompt_id: "gen_abc", status: "submitted" }) }],
+    });
+    vi.mocked(getMcpClient).mockResolvedValue({
+      callTool,
+      listTools: vi.fn().mockResolvedValue([]),
+      close: vi.fn().mockResolvedValue(undefined),
+    });
+    const { generateImage } = await import("../src/commands/generate.js");
+    await generateImage("bfl/flux-pro-1.1", "a cat");
+    expect(callTool).toHaveBeenCalledWith(
+      "partner_generate",
+      expect.objectContaining({ type: "image" })
+    );
+  });
+
+  it("forwards type=video when specified", async () => {
+    const callTool = vi.fn().mockResolvedValue({
+      content: [{ text: JSON.stringify({ prompt_id: "gen_vid", status: "submitted" }) }],
+    });
+    vi.mocked(getMcpClient).mockResolvedValue({
+      callTool,
+      listTools: vi.fn().mockResolvedValue([]),
+      close: vi.fn().mockResolvedValue(undefined),
+    });
+    const { generateImage } = await import("../src/commands/generate.js");
+    await generateImage("kling/kling-v2", "a sunset timelapse", undefined, false, "video");
+    expect(callTool).toHaveBeenCalledWith(
+      "partner_generate",
+      expect.objectContaining({ type: "video" })
+    );
+  });
+
+  it("forwards type=audio when specified", async () => {
+    const callTool = vi.fn().mockResolvedValue({
+      content: [{ text: JSON.stringify({ prompt_id: "gen_aud", status: "submitted" }) }],
+    });
+    vi.mocked(getMcpClient).mockResolvedValue({
+      callTool,
+      listTools: vi.fn().mockResolvedValue([]),
+      close: vi.fn().mockResolvedValue(undefined),
+    });
+    const { generateImage } = await import("../src/commands/generate.js");
+    await generateImage("elevenlabs/eleven-multilingual-v2", "hello world", undefined, false, "audio");
+    expect(callTool).toHaveBeenCalledWith(
+      "partner_generate",
+      expect.objectContaining({ type: "audio" })
+    );
+  });
+});
+
 describe("runTemplate", () => {
   it("returns prompt_id from a JSON response", async () => {
     vi.mocked(getMcpClient).mockResolvedValue(

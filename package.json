@@ -1,12 +1,12 @@
 {
   "name": "comfy-cloud-axi",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "packageManager": "pnpm@11.1.1",
   "description": "AXI-compliant Comfy Cloud CLI — token-efficient TOON output for AI generation workflows, jobs, and models",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/intelligentrascal/comfy-cloud-axi.git"
+    "url": "git+https://github.com/intelligentrascal/comfy-cloud-axi.git"
   },
   "keywords": [
     "comfy",
@@ -21,7 +21,7 @@
     "video"
   ],
   "bin": {
-    "comfy-cloud-axi": "./dist/bin/comfy-cloud-axi.js"
+    "comfy-cloud-axi": "dist/bin/comfy-cloud-axi.js"
   },
   "files": [
     "dist",

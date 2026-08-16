@@ -315,7 +315,7 @@ export async function main(): Promise<void> {
 						['Run `comfy-cloud-axi generate <model> "<prompt>" [--confirm]`'],
 					);
 				}
-				return await generateImage(model, prompt, aspectRatio, confirm);
+				return await generateImage(model, prompt, aspectRatio, confirm, genType);
 			},
 			job: async (args) => {
 				if (args[0] === "--help") return COMMAND_HELP.job;
