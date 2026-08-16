@@ -442,6 +442,13 @@ export async function main(): Promise<void> {
 			},
 			models: async (args) => {
 				if (args[0] === "--help") return COMMAND_HELP.models;
+				const unknownFlag = args.find((a) => a.startsWith("--"));
+				if (unknownFlag)
+					throw new AxiError(
+						`unknown flag: ${unknownFlag}`,
+						"VALIDATION_ERROR",
+						["Usage: comfy-cloud-axi models <query>", "No flags are supported for this command — pass your query as plain text"],
+					);
 				const query = args.join(" ") || "";
 				if (!query) throw new AxiError("search query is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi models <query>`"]);
 				return await searchModels(query);
