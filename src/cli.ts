@@ -242,6 +242,13 @@ export async function main(): Promise<void> {
 		commands: {
 			catalog: async (args) => {
 				if (args[0] === "--help") return COMMAND_HELP.catalog;
+				const unexpected = args.filter((a) => a !== "--help");
+				if (unexpected.length > 0)
+					throw new AxiError(
+						`unexpected argument: ${unexpected[0]}`,
+						"VALIDATION_ERROR",
+						["Usage: comfy-cloud-axi catalog"],
+					);
 				return await getCatalog();
 			},
 			guide: async (args) => {
@@ -447,6 +454,13 @@ export async function main(): Promise<void> {
 			},
 			queue: async (args) => {
 				if (args[0] === "--help") return COMMAND_HELP.queue;
+				const unexpected = args.filter((a) => a !== "--help");
+				if (unexpected.length > 0)
+					throw new AxiError(
+						`unexpected argument: ${unexpected[0]}`,
+						"VALIDATION_ERROR",
+						["Usage: comfy-cloud-axi queue"],
+					);
 				return await getQueue();
 			},
 			usage: async (args) => {

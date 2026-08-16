@@ -41,8 +41,17 @@ export async function getMcpClient(): Promise<McpClient> {
   await impl.connect(transport);
 
   client = {
-    callTool: (toolName: string, args: Record<string, unknown>) =>
-      impl.callTool({ name: toolName, arguments: args }),
+    callTool: async (toolName: string, args: Record<string, unknown>) => {
+      const result = (await impl.callTool({ name: toolName, arguments: args })) as {
+        isError?: boolean;
+        content?: { text?: string }[];
+      };
+      if (result.isError) {
+        const errText = result.content?.[0]?.text ?? `${toolName} returned an error`;
+        throw new Error(errText);
+      }
+      return result;
+    },
     listTools: async () => {
       const { tools } = await impl.listTools();
       return tools.map((t) => ({ name: t.name, description: t.description }));
