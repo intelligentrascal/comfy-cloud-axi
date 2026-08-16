@@ -24,8 +24,13 @@ export async function getQueue(): Promise<QueueStatus> {
       "Queue response could not be decoded — the upstream server returned an unrecognisable payload"
     );
   }
+  if (typeof data.running !== "number" || typeof data.pending !== "number") {
+    throw new Error(
+      "Queue response is missing required fields — expected {running: number, pending: number} from upstream server"
+    );
+  }
   return {
-    running: (data.running as number) ?? 0,
-    pending: (data.pending as number) ?? 0,
+    running: data.running,
+    pending: data.pending,
   };
 }

@@ -4,7 +4,7 @@ vi.mock("../src/mcp/client.js", () => ({
   getMcpClient: vi.fn().mockResolvedValue({
     callTool: vi.fn().mockImplementation(async (toolName: string) => {
       if (toolName === "get_queue") {
-        return { content: [{ text: '{"queue_running":[],"queue_pending":[]}' }] };
+        return { content: [{ text: '{"running":0,"pending":0}' }] };
       }
       if (toolName === "get_job_status") {
         return { content: [{ text: '{"prompt_id":"abc123","status":"completed","ready":true}' }] };
