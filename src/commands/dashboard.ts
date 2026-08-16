@@ -25,8 +25,13 @@ export async function getDashboard(): Promise<DashboardResult> {
       "Dashboard queue response could not be decoded — the upstream server returned an unrecognisable payload"
     );
   }
-  const running = (data.running as number) ?? 0;
-  const pending = (data.pending as number) ?? 0;
+  if (typeof data.running !== "number" || typeof data.pending !== "number") {
+    throw new Error(
+      "Dashboard queue response is missing required fields — expected {running: number, pending: number} from upstream server"
+    );
+  }
+  const running = data.running;
+  const pending = data.pending;
 
   return {
     queue: { running, pending },
