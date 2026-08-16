@@ -16,17 +16,17 @@ export async function getDashboard(): Promise<DashboardResult> {
     content?: { text?: string }[];
   };
 
-  let running = 0;
-  let pending = 0;
-
   const data = parseJsonFromContent(queueResult.content) as Record<
     string,
     unknown
   > | null;
-  if (data && typeof data === "object") {
-    running = (data.running as number) ?? 0;
-    pending = (data.pending as number) ?? 0;
+  if (!data || typeof data !== "object") {
+    throw new Error(
+      "Dashboard queue response could not be decoded — the upstream server returned an unrecognisable payload"
+    );
   }
+  const running = (data.running as number) ?? 0;
+  const pending = (data.pending as number) ?? 0;
 
   return {
     queue: { running, pending },

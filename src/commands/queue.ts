@@ -19,12 +19,13 @@ export async function getQueue(): Promise<QueueStatus> {
     string,
     unknown
   > | null;
-  if (data && typeof data === "object") {
-    return {
-      running: (data.running as number) ?? 0,
-      pending: (data.pending as number) ?? 0,
-    };
+  if (!data || typeof data !== "object") {
+    throw new Error(
+      "Queue response could not be decoded — the upstream server returned an unrecognisable payload"
+    );
   }
-
-  return EMPTY;
+  return {
+    running: (data.running as number) ?? 0,
+    pending: (data.pending as number) ?? 0,
+  };
 }
