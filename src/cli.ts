@@ -224,6 +224,17 @@ Flags:
   --help  Show this help`,
 };
 
+/** Throw VALIDATION_ERROR if any arg starts with '--' (unknown flags leaked into positional list). */
+function rejectUnknownFlagInPositionals(positionals: string[], usage: string): void {
+	const flag = positionals.find((a) => a.startsWith("--"));
+	if (flag)
+		throw new AxiError(
+			`unknown flag: ${flag}`,
+			"VALIDATION_ERROR",
+			[`Run \`comfy-cloud-axi ${usage} --help\` to see available flags`],
+		);
+}
+
 export async function main(): Promise<void> {
 	try {
 		await runAxiCli({
@@ -313,6 +324,7 @@ export async function main(): Promise<void> {
 						(typeIdx === -1 || i !== typeIdx + 1) &&
 						(aspectRatioIdx === -1 || i !== aspectRatioIdx + 1),
 				);
+				rejectUnknownFlagInPositionals(positionals, "generate");
 				const model = positionals[0];
 				const prompt = positionals.slice(1).join(" ");
 				if (!model || !prompt) {
@@ -330,27 +342,32 @@ export async function main(): Promise<void> {
 				if (subcommand === "status") {
 					const promptId = args[1];
 					if (!promptId) throw new AxiError("prompt_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi job status <prompt_id>`"]);
+					rejectUnknownFlagInPositionals(args.slice(2), "job status");
 					return await getJobStatus(promptId);
 				}
 				if (subcommand === "wait") {
 					const promptId = args[1];
 					if (!promptId) throw new AxiError("prompt_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi job wait <prompt_id>`"]);
+					rejectUnknownFlagInPositionals(args.slice(2), "job wait");
 					return await waitForJob(promptId);
 				}
 				if (subcommand === "cancel") {
 					const promptId = args[1];
 					if (!promptId) throw new AxiError("prompt_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi job cancel <prompt_id>`"]);
+					rejectUnknownFlagInPositionals(args.slice(2), "job cancel");
 					return await cancelJob(promptId);
 				}
 				if (subcommand === "chain") {
 					const promptId = args[1];
 					if (!promptId) throw new AxiError("prompt_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi job chain <prompt_id>`"]);
 					const outputIndex = args[2] ? parseInt(args[2], 10) : 0;
+					rejectUnknownFlagInPositionals(args.slice(3), "job chain");
 					return await usePreviousOutput(promptId, outputIndex);
 				}
 				if (subcommand === "batch") {
 					const batchId = args[1];
 					if (!batchId) throw new AxiError("batch_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi job batch <batch_id>`"]);
+					rejectUnknownFlagInPositionals(args.slice(2), "job batch");
 					return await getBatchStatus(batchId);
 				}
 				throw new AxiError(
