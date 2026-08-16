@@ -47,7 +47,7 @@ export async function getOutput(
     }
   }
 
-  return { error: "No output returned" };
+  throw new Error("No output returned — upstream returned an empty payload");
 }
 
 /**
@@ -64,7 +64,7 @@ export async function listWorkflows(): Promise<Record<string, unknown>> {
     unknown
   > | null;
   if (!data) {
-    return { error: "No workflows returned", workflows: [] };
+    throw new Error("No workflows returned — upstream returned an empty payload");
   }
 
   const workflows = Array.isArray(data.data)
@@ -115,7 +115,7 @@ export async function runSavedWorkflow(
     try { return JSON.parse(text); } catch { return { result: text }; }
   }
 
-  return { error: "No run_saved_workflow response returned" };
+  throw new Error("No run_saved_workflow response returned — upstream returned an empty payload");
 }
 
 /**
@@ -141,5 +141,5 @@ export async function usePreviousOutput(
   const text = result.content?.[result.content.length - 1]?.text;
   if (text) return { filename: text };
 
-  return { error: "No use_previous_output response returned" };
+  throw new Error("No use_previous_output response returned — upstream returned an empty payload");
 }

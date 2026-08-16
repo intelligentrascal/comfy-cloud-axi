@@ -40,7 +40,7 @@ export async function searchNodes(
     unknown
   > | null;
   if (!data) {
-    return { error: "No nodes response returned", nodes: [] };
+    throw new Error("No nodes response returned — upstream returned an empty payload");
   }
 
   const nodes = (

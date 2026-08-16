@@ -27,7 +27,7 @@ export async function getPromptingGuide(model: string): Promise<GuideResult> {
     // Guide may come back as plain text prose rather than JSON
     const raw = result.content?.[result.content.length - 1]?.text;
     if (raw) return { model, guide: raw };
-    return { error: "No guide returned", model };
+    throw new Error("No guide returned — upstream returned an empty payload");
   }
 
   return { model, ...data } as GuideResult;

@@ -30,7 +30,7 @@ export async function searchTemplates(
     unknown
   > | null;
   if (!data) {
-    return { error: "No templates response returned", templates: [] };
+    throw new Error("No templates response returned — upstream returned an empty payload");
   }
 
   try {
@@ -44,7 +44,7 @@ export async function searchTemplates(
       message: templates.length === 0 ? "No templates found" : undefined,
     };
   } catch {
-    return { error: "Failed to parse templates response", templates: [] };
+    throw new Error("Failed to parse templates response — upstream returned an unexpected shape");
   }
 }
 
@@ -85,5 +85,5 @@ export async function runTemplate(
   const text = result.content?.[result.content.length - 1]?.text;
   if (text) return { output: text };
 
-  return { error: "No run_template response returned" };
+  throw new Error("No run_template response returned — upstream returned an empty payload");
 }

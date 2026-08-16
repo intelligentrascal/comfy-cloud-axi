@@ -73,15 +73,14 @@ describe("getCatalog", () => {
     expect(Array.isArray(result.node_categories)).toBe(true);
   });
 
-  it("returns an error when no response content is returned", async () => {
+  it("throws when no response content is returned", async () => {
     vi.mocked(getMcpClient).mockResolvedValue(
       mockClient({
         get_catalog_overview: { content: [] },
       })
     );
     const { getCatalog } = await import("../src/commands/catalog.js");
-    const result = await getCatalog();
-    expect(result.error).toBeTruthy();
+    await expect(getCatalog()).rejects.toThrow("No catalog response returned");
   });
 });
 
@@ -125,15 +124,14 @@ describe("estimateTemplate / estimateWorkflow", () => {
     expect(typeof result.raw).toBe("string");
   });
 
-  it("estimateTemplate returns an error when no content is returned", async () => {
+  it("estimateTemplate throws when no content is returned", async () => {
     vi.mocked(getMcpClient).mockResolvedValue(
       mockClient({
         estimate_credits: { content: [] },
       })
     );
     const { estimateTemplate } = await import("../src/commands/estimate.js");
-    const result = await estimateTemplate("flux-turbo-t2i");
-    expect(result.error).toBeTruthy();
+    await expect(estimateTemplate("flux-turbo-t2i")).rejects.toThrow("No estimate response returned");
   });
 });
 
@@ -183,16 +181,14 @@ describe("getPromptingGuide", () => {
     expect(result.guide).toContain("Use detailed");
   });
 
-  it("returns an error when no content is returned", async () => {
+  it("throws when no content is returned", async () => {
     vi.mocked(getMcpClient).mockResolvedValue(
       mockClient({
         get_prompting_guide: { content: [] },
       })
     );
     const { getPromptingGuide } = await import("../src/commands/guide.js");
-    const result = await getPromptingGuide("bfl/flux-pro-1.1-ultra");
-    expect(result.error).toBeTruthy();
-    expect(result.model).toBe("bfl/flux-pro-1.1-ultra");
+    await expect(getPromptingGuide("bfl/flux-pro-1.1-ultra")).rejects.toThrow("No guide returned");
   });
 });
 
@@ -247,16 +243,14 @@ describe("waitForJob", () => {
     expect(result.prompt_id).toBe("abc123");
   });
 
-  it("returns an error when no content is returned", async () => {
+  it("throws when no content is returned", async () => {
     vi.mocked(getMcpClient).mockResolvedValue(
       mockClient({
         wait_for_job: { content: [] },
       })
     );
     const { waitForJob } = await import("../src/commands/job.js");
-    const result = await waitForJob("abc123");
-    expect(result.error).toBeTruthy();
-    expect(result.prompt_id).toBe("abc123");
+    await expect(waitForJob("abc123")).rejects.toThrow("No wait response returned");
   });
 });
 
@@ -301,15 +295,14 @@ describe("listWorkflows", () => {
     expect(result.count).toBe(0);
   });
 
-  it("returns an error when no content is returned", async () => {
+  it("throws when no content is returned", async () => {
     vi.mocked(getMcpClient).mockResolvedValue(
       mockClient({
         list_saved_workflows: { content: [] },
       })
     );
     const { listWorkflows } = await import("../src/commands/workflow.js");
-    const result = await listWorkflows();
-    expect(result.error).toBeTruthy();
+    await expect(listWorkflows()).rejects.toThrow("No workflows returned");
   });
 });
 
@@ -370,15 +363,14 @@ describe("getBatchOutput", () => {
     expect(Array.isArray(result.outputs)).toBe(true);
   });
 
-  it("returns an error when no content is returned", async () => {
+  it("throws when no content is returned", async () => {
     vi.mocked(getMcpClient).mockResolvedValue(
       mockClient({
         get_batch_output: { content: [] },
       })
     );
     const { getBatchOutput } = await import("../src/commands/batch.js");
-    const result = await getBatchOutput("batch_abc");
-    expect(result.error).toBeTruthy();
+    await expect(getBatchOutput("batch_abc")).rejects.toThrow("No batch output returned");
   });
 });
 
@@ -533,14 +525,13 @@ describe("runTemplate", () => {
     expect(result.output).toContain("Template submitted");
   });
 
-  it("returns an error when no content is returned", async () => {
+  it("throws when no content is returned", async () => {
     vi.mocked(getMcpClient).mockResolvedValue(
       mockClient({
         run_template: { content: [] },
       })
     );
     const { runTemplate } = await import("../src/commands/templates.js");
-    const result = await runTemplate("portrait-gen");
-    expect(result.error).toBeTruthy();
+    await expect(runTemplate("portrait-gen")).rejects.toThrow("No run_template response returned");
   });
 });

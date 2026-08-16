@@ -316,6 +316,13 @@ export async function main(): Promise<void> {
 				const aspectRatioIdx = args.indexOf("--aspect-ratio");
 				const aspectRatio =
 					aspectRatioIdx !== -1 ? args[aspectRatioIdx + 1] : undefined;
+				if (aspectRatioIdx !== -1 && (!aspectRatio || aspectRatio.startsWith("--"))) {
+					throw new AxiError(
+						"--aspect-ratio requires a value (e.g. 16:9, 1:1, 9:16)",
+						"VALIDATION_ERROR",
+						['Usage: comfy-cloud-axi generate <model> "<prompt>" --aspect-ratio 16:9'],
+					);
+				}
 				const positionals = args.filter(
 					(a, i) =>
 						a !== "--confirm" &&
@@ -343,18 +350,24 @@ export async function main(): Promise<void> {
 					const promptId = args[1];
 					if (!promptId) throw new AxiError("prompt_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi job status <prompt_id>`"]);
 					rejectUnknownFlagInPositionals(args.slice(2), "job status");
+					const extraStatus = args.slice(2).filter((a) => !a.startsWith("--"));
+					if (extraStatus.length > 0) throw new AxiError(`unexpected argument: ${extraStatus[0]}`, "VALIDATION_ERROR", ["Run `comfy-cloud-axi job status --help`"]);
 					return await getJobStatus(promptId);
 				}
 				if (subcommand === "wait") {
 					const promptId = args[1];
 					if (!promptId) throw new AxiError("prompt_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi job wait <prompt_id>`"]);
 					rejectUnknownFlagInPositionals(args.slice(2), "job wait");
+					const extraWait = args.slice(2).filter((a) => !a.startsWith("--"));
+					if (extraWait.length > 0) throw new AxiError(`unexpected argument: ${extraWait[0]}`, "VALIDATION_ERROR", ["Run `comfy-cloud-axi job wait --help`"]);
 					return await waitForJob(promptId);
 				}
 				if (subcommand === "cancel") {
 					const promptId = args[1];
 					if (!promptId) throw new AxiError("prompt_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi job cancel <prompt_id>`"]);
 					rejectUnknownFlagInPositionals(args.slice(2), "job cancel");
+					const extraCancel = args.slice(2).filter((a) => !a.startsWith("--"));
+					if (extraCancel.length > 0) throw new AxiError(`unexpected argument: ${extraCancel[0]}`, "VALIDATION_ERROR", ["Run `comfy-cloud-axi job cancel --help`"]);
 					return await cancelJob(promptId);
 				}
 				if (subcommand === "chain") {
@@ -362,12 +375,16 @@ export async function main(): Promise<void> {
 					if (!promptId) throw new AxiError("prompt_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi job chain <prompt_id>`"]);
 					const outputIndex = args[2] ? parseInt(args[2], 10) : 0;
 					rejectUnknownFlagInPositionals(args.slice(3), "job chain");
+					const extraChain = args.slice(3).filter((a) => !a.startsWith("--"));
+					if (extraChain.length > 0) throw new AxiError(`unexpected argument: ${extraChain[0]}`, "VALIDATION_ERROR", ["Run `comfy-cloud-axi job chain --help`"]);
 					return await usePreviousOutput(promptId, outputIndex);
 				}
 				if (subcommand === "batch") {
 					const batchId = args[1];
 					if (!batchId) throw new AxiError("batch_id is required", "VALIDATION_ERROR", ["Run `comfy-cloud-axi job batch <batch_id>`"]);
 					rejectUnknownFlagInPositionals(args.slice(2), "job batch");
+					const extraBatch = args.slice(2).filter((a) => !a.startsWith("--"));
+					if (extraBatch.length > 0) throw new AxiError(`unexpected argument: ${extraBatch[0]}`, "VALIDATION_ERROR", ["Run `comfy-cloud-axi job batch --help`"]);
 					return await getBatchStatus(batchId);
 				}
 				throw new AxiError(

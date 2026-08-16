@@ -65,7 +65,7 @@ export async function getBatchOutput(
   const text = result.content?.[result.content.length - 1]?.text;
   if (text) return { output: text };
 
-  return { error: "No batch output returned" };
+  throw new Error("No batch output returned — upstream returned an empty payload");
 }
 
 /**
@@ -90,5 +90,5 @@ export async function waitForBatch(
   const text = result.content?.[result.content.length - 1]?.text;
   if (text) return { result: text };
 
-  return { error: "No wait_for_batch response returned" };
+  throw new Error("No wait_for_batch response returned — upstream returned an empty payload");
 }
