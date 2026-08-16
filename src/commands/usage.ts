@@ -28,7 +28,7 @@ export async function getUsageReport(
   if (!data) {
     const raw = result.content?.[result.content.length - 1]?.text;
     if (raw) return { raw } as UsageResult;
-    return { error: "No usage report returned" };
+    throw new Error("No usage report returned — upstream returned an empty payload");
   }
 
   return data;

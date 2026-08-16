@@ -49,5 +49,5 @@ function parseEstimateResult(
   if (data) return data;
   const raw = content?.[content.length - 1]?.text;
   if (raw) return { raw } as EstimateResult;
-  return { error: "No estimate response returned" };
+  throw new Error("No estimate response returned — upstream returned an empty payload");
 }

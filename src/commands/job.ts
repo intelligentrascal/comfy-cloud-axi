@@ -25,7 +25,7 @@ export async function getJobStatus(promptId: string): Promise<JobStatus> {
     return { prompt_id: promptId, raw };
   }
 
-  return { error: "No job status returned", prompt_id: promptId };
+  throw new Error("No job status returned — upstream returned an empty payload");
 }
 
 export async function getBatchStatus(
@@ -46,7 +46,7 @@ export async function getBatchStatus(
     return { batch_id: batchId, raw };
   }
 
-  return { error: "No batch status returned" };
+  throw new Error("No batch status returned — upstream returned an empty payload");
 }
 
 /**
@@ -63,7 +63,7 @@ export async function waitForJob(promptId: string): Promise<JobStatus> {
   const parsed = parseJobStatusContent(result.content);
   if (parsed !== undefined) return parsed;
 
-  return { error: "No wait response returned", prompt_id: promptId };
+  throw new Error("No wait response returned — upstream returned an empty payload");
 }
 
 /**

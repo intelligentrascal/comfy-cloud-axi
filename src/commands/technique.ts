@@ -29,7 +29,7 @@ export async function getCreativeTechnique(
   if (!data) {
     const raw = result.content?.[result.content.length - 1]?.text;
     if (raw) return { techniques: raw } as unknown as TechniqueResult;
-    return { error: "No technique response returned" };
+    throw new Error("No technique response returned — upstream returned an empty payload");
   }
 
   return data;

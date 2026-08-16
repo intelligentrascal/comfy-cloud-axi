@@ -31,7 +31,7 @@ export async function searchModels(
     unknown
   > | null;
   if (!data) {
-    return { error: "No models response returned", models: [] };
+    throw new Error("No models response returned — upstream returned an empty payload");
   }
 
   try {
@@ -45,6 +45,6 @@ export async function searchModels(
       message: models.length === 0 ? "No models found" : undefined,
     };
   } catch {
-    return { error: "Failed to parse models response", models: [] };
+    throw new Error("Failed to parse models response — upstream returned an unexpected shape");
   }
 }

@@ -24,7 +24,7 @@ export async function getCatalog(): Promise<CatalogResult> {
 
   const data = parseJsonFromContent(result.content) as CatalogResult | null;
   if (!data) {
-    return { error: "No catalog response returned" };
+    throw new Error("No catalog response returned — upstream returned an empty payload");
   }
 
   return data;

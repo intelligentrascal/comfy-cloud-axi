@@ -50,12 +50,12 @@ export async function generateImage(
 			// plain text - surface them as-is so the confirmation request or error
 			// is visible instead of a generic parse failure.
 			return {
-				error: text,
+				message: text,
 				status: /^Submitted/i.test(text) ? "submitted" : "unconfirmed",
 				confirm_required: /CONFIRMATION REQUIRED/i.test(text),
 			};
 		}
 	}
 
-	return { error: "No generation response returned", status: "unknown" };
+	throw new Error("No generation response returned — upstream returned an empty payload");
 }
